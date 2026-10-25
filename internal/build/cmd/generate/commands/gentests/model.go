@@ -962,7 +962,7 @@ func expand(s string, format ...string) string {
 	// Build a chain of safe lookups:
 	// - numeric segments: getIndexOrKey(container, N) (array index OR map key "N")
 	// - string segments:  getKey(container, "segment")
-	for _, p := range parts {
+	for i, p := range parts {
 		if p == "" {
 			continue
 		}
@@ -973,6 +973,15 @@ func expand(s string, format ...string) string {
 
 		// Remove quotes from keys, keep literal-dot marker.
 		p = strings.Trim(p, `"`)
+
+		// A path that starts with a stashed value ("$profile.uid") is a path
+		// into that value, not into the response: the YAML runners replace the
+		// first segment with what was stashed. Reading it as a key of the
+		// response finds nothing.
+		if i == 0 && strings.HasPrefix(p, "$") && p != "$body" {
+			expr = fmt.Sprintf("stash[%q]", p)
+			continue
+		}
 
 		// Dynamic keys via stash (rare): use fmt.Sprintf to avoid type assertion panics.
 		if strings.HasPrefix(p, "$") {
