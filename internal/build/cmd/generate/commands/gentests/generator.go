@@ -834,9 +834,21 @@ func (g *Generator) genXPackSetup() {
 			}
 
 			{
-				res, _ = es.Security.PutUser("x_pack_rest_user", strings.NewReader(` + "`" + `{"password":"x-pack-test-password", "roles":["superuser"]}` + "`" + `), es.Security.PutUser.WithPretty())
+				// Elastic's test clusters define x_pack_rest_user in the file
+				// realm, and tests that list native users (query_user in
+				// security/50_user_profile.yml) count only their own: a native
+				// copy is created only where the cluster has no such user.
+				res, _ = es.Security.Authenticate(es.Security.Authenticate.WithHeader(map[string]string{
+					"Authorization": "Basic eF9wYWNrX3Jlc3RfdXNlcjp4LXBhY2stdGVzdC1wYXNzd29yZA==",
+				}))
 				if res != nil && res.Body != nil {
 					defer res.Body.Close()
+				}
+				if res == nil || res.StatusCode != 200 {
+					res, _ = es.Security.PutUser("x_pack_rest_user", strings.NewReader(` + "`" + `{"password":"x-pack-test-password", "roles":["superuser"]}` + "`" + `), es.Security.PutUser.WithPretty())
+					if res != nil && res.Body != nil {
+						defer res.Body.Close()
+					}
 				}
 			}
 
