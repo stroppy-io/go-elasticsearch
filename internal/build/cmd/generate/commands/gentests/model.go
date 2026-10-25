@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -484,6 +485,19 @@ func (a Action) Params() map[string]interface{} {
 	}
 
 	return out
+}
+
+// ParamNames returns the names of Params, sorted: the generated request's
+// fields and its debug comment then come out the same on every run, where
+// map order made them differ between two generations of the same YAML.
+func (a Action) ParamNames() []string {
+	params := a.Params()
+	names := make([]string, 0, len(params))
+	for k := range params {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Condition returns the condition for the assertion.

@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -973,7 +974,9 @@ func (g *Generator) genSteps(t Test) {
 			var dbg strings.Builder
 			dbg.WriteString("\t\t// => " + step.(Action).Method() + "(")
 			var j int
-			for k, v := range step.(Action).Params() {
+			params := step.(Action).Params()
+			for _, k := range step.(Action).ParamNames() {
+				v := params[k]
 				j++
 				dbg.WriteString(k + ": " + strings.Replace(fmt.Sprintf("%v", v), "\n", "|", -1))
 				if j < len(step.(Action).Params()) {
@@ -1182,7 +1185,9 @@ func (g *Generator) genAction(a Action, skipBody ...bool) {
 	}
 
 	// Pass the parameters
-	for k, v := range a.Params() {
+	params := a.Params()
+	for _, k := range a.ParamNames() {
+		v := params[k]
 		// fmt.Printf("%s.%s: <%T> %v\n", a.Request(), k, v, v)
 
 		if strings.HasPrefix(fmt.Sprintf("%s", v), "$") {
@@ -1508,7 +1513,13 @@ func (g *Generator) genAction(a Action, skipBody ...bool) {
 		}
 
 		g.w("\t\tHeader: http.Header{\n")
-		for name, value := range a.headers {
+		names := make([]string, 0, len(a.headers))
+		for name := range a.headers {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			value := a.headers[name]
 
 			if name == "Content-Type" && value == "application/json" {
 				continue
