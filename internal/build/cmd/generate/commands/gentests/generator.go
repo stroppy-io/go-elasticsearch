@@ -260,6 +260,12 @@ func (g *Generator) genInitializeClient() {
 			}` + "\n")
 
 	g.w(`
+	// A run measuring a server the product check refuses asks for the check to be off.
+	if os.Getenv("ELASTICSEARCH_SKIP_PRODUCT_CHECK") != "" {
+		cfg.SkipProductCheck = true
+	}` + "\n")
+
+	g.w(`
 	es, eserr := elasticsearch.NewClient(cfg)
 	if eserr != nil {
 		t.Fatalf("Error creating the client: %s\n", eserr)

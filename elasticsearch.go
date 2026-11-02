@@ -94,6 +94,10 @@ type Config struct {
 
 	DisableMetaHeader    bool // Disable the additional "X-Elastic-Client-Meta" HTTP header.
 	UseResponseCheckOnly bool
+	// SkipProductCheck turns the product check off: the client then talks to a
+	// server that does not identify as Elasticsearch. Off by default; for
+	// measuring an Elasticsearch-compatible server, never for production.
+	SkipProductCheck bool
 
 	RetryBackoff func(attempt int) time.Duration // Optional backoff duration. Default: nil.
 
@@ -111,6 +115,7 @@ type Client struct {
 	*esapi.API           // Embeds the API methods
 	Transport            estransport.Interface
 	useResponseCheckOnly bool
+	skipProductCheck     bool
 
 	productCheckMu      sync.RWMutex
 	productCheckSuccess bool
@@ -225,7 +230,11 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("error creating transport: %s", err)
 	}
 
-	client := &Client{Transport: tp, useResponseCheckOnly: cfg.UseResponseCheckOnly}
+	client := &Client{
+		Transport:            tp,
+		useResponseCheckOnly: cfg.UseResponseCheckOnly,
+		skipProductCheck:     cfg.SkipProductCheck,
+	}
 	client.API = esapi.New(client)
 
 	if cfg.DiscoverNodesOnStart {
@@ -292,8 +301,9 @@ func ParseElasticsearchVersion(version string) (int64, int64, int64, error) {
 //
 func (c *Client) Perform(req *http.Request) (*http.Response, error) {
 	// ProductCheck validation. We skip this validation of we only want the
-	// header validation. ResponseCheck path continues after original request.
-	if !c.useResponseCheckOnly {
+	// header validation, and when the client was built without the check.
+	// ResponseCheck path continues after original request.
+	if !c.useResponseCheckOnly && !c.skipProductCheck {
 		// Launch product check for 7.x, request info, check header then payload.
 		if err := c.doProductCheck(req.Context(), c.productCheck); err != nil {
 			return nil, err
@@ -304,7 +314,7 @@ func (c *Client) Perform(req *http.Request) (*http.Response, error) {
 	res, err := c.Transport.Perform(req)
 
 	// ResponseCheck path continues, we run the header check on the first answer from ES.
-	if err == nil && (res.StatusCode >= 200 && res.StatusCode < 300){
+	if err == nil && !c.skipProductCheck && (res.StatusCode >= 200 && res.StatusCode < 300){
 		checkHeader := func(context.Context) error {
 			return genuineCheckHeader(res.Header)
 		}

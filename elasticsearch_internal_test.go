@@ -703,6 +703,24 @@ func TestResponseCheckOnly(t *testing.T) {
 	}
 }
 
+func TestSkipProductCheck(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"version":{"number":"2.19.0"},"tagline":"The OpenSearch Project: https://opensearch.org/"}`))
+	}))
+	defer server.Close()
+
+	c, _ := NewClient(Config{Addresses: []string{server.URL}, DisableRetry: true})
+	if _, err := c.Cat.Indices(); err == nil {
+		t.Fatal("expected the product check to refuse the server")
+	}
+
+	c, _ = NewClient(Config{Addresses: []string{server.URL}, DisableRetry: true, SkipProductCheck: true})
+	if _, err := c.Cat.Indices(); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
 func TestProductCheckError(t *testing.T) {
 	var requestPaths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
