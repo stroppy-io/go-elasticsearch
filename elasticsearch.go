@@ -123,6 +123,13 @@ type Config struct {
 	// Default: false.
 	AutoDrainBody bool
 
+	// SkipProductCheck turns the product check off: the client then talks to a
+	// server that does not identify as Elasticsearch. Off by default; for
+	// measuring an Elasticsearch-compatible server, never for production.
+	// Only the Config constructors read it, which is how the client's own
+	// test generator builds the client.
+	SkipProductCheck bool
+
 	RetryBackoff func(attempt int) time.Duration // Optional backoff duration. Default: nil.
 
 	Transport http.RoundTripper         // The HTTP transport object.
@@ -166,6 +173,7 @@ type BaseClient struct {
 
 	autoDrainBody       bool
 	disableMetaHeader   bool
+	skipProductCheck    bool
 	productCheckMu      sync.RWMutex
 	productCheckSuccess bool
 
@@ -197,6 +205,7 @@ func NewBaseClient(cfg Config) (*BaseClient, error) {
 	client := &BaseClient{
 		Transport:           tp,
 		disableMetaHeader:   cfg.DisableMetaHeader,
+		skipProductCheck:    cfg.SkipProductCheck,
 		metaHeader:          initMetaHeader(tp),
 		compatibilityHeader: cfg.EnableCompatibilityMode || compatibilityHeader,
 		autoDrainBody:       cfg.AutoDrainBody,
@@ -243,6 +252,7 @@ func NewClient(cfg Config) (*Client, error) {
 		BaseClient: BaseClient{
 			Transport:           tp,
 			disableMetaHeader:   cfg.DisableMetaHeader,
+			skipProductCheck:    cfg.SkipProductCheck,
 			metaHeader:          initMetaHeader(tp),
 			compatibilityHeader: cfg.EnableCompatibilityMode || compatibilityHeader,
 			autoDrainBody:       cfg.AutoDrainBody,
@@ -277,6 +287,7 @@ func NewTypedClient(cfg Config) (*TypedClient, error) {
 		BaseClient: BaseClient{
 			Transport:           tp,
 			disableMetaHeader:   cfg.DisableMetaHeader,
+			skipProductCheck:    cfg.SkipProductCheck,
 			metaHeader:          metaHeader,
 			compatibilityHeader: cfg.EnableCompatibilityMode || compatibilityHeader,
 			autoDrainBody:       cfg.AutoDrainBody,
@@ -404,6 +415,7 @@ func NewTypedFrom(c *Client) *TypedClient {
 		BaseClient: BaseClient{
 			Transport:           c.Transport,
 			disableMetaHeader:   c.disableMetaHeader,
+			skipProductCheck:    c.skipProductCheck,
 			metaHeader:          metaHeader,
 			compatibilityHeader: c.compatibilityHeader,
 			autoDrainBody:       c.autoDrainBody,
@@ -569,7 +581,7 @@ func (c *BaseClient) Perform(req *http.Request) (*http.Response, error) {
 	}
 
 	// ResponseCheck, we run the header check on the first answer from ES.
-	if res.StatusCode >= 200 && res.StatusCode < 300 {
+	if res.StatusCode >= 200 && res.StatusCode < 300 && !c.skipProductCheck {
 		checkHeader := func() error { return genuineCheckHeader(res.Header) }
 		if err := c.doProductCheck(checkHeader); err != nil {
 			res.Body.Close()
